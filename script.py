@@ -25,7 +25,7 @@ def run_fio_test(test_name, filename, size, rw, bs, iodepth, numjobs, runtime, d
         ioengine: IO 引擎类型 (libaio, io_uring, sync 等)
     """
     output_format = "json"
-    output_file = f"fio_results_{test_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = f"result/fio_results_{test_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
     cmd = [
         "fio",

@@ -16,6 +16,10 @@ import numpy as np
 # 导入 script.py 中的函数
 from script import run_fio_test
 
+plt.rcParams['font.sans-serif'] = ['SimHei'] # 设置字体为黑体
+plt.rcParams['axes.unicode_minus'] = False # 解决负号显示为方块的问题
+
+
 def get_iops_from_results(results):
     """从 FIO 结果中提取 IOPS 值"""
     if not results:
@@ -180,7 +184,7 @@ def visualize_results(result_file='iops_test_results.csv'):
         plt.legend()
         
         # 保存图表
-        plt.savefig(f"iops_{rw}_results.png")
+        plt.savefig(f"result/iops_{rw}_results.png")
         print(f"已保存图表: iops_{rw}_results.png")
     
     # 创建一个汇总图表，显示不同读写模式的最佳 IOPS
@@ -206,7 +210,7 @@ def visualize_results(result_file='iops_test_results.csv'):
         plt.text(i, iops, f"{int(iops)}", ha='center', va='bottom')
     
     # 保存图表
-    plt.savefig("best_iops_by_rw.png")
+    plt.savefig("result/best_iops_by_rw.png")
     print("已保存汇总图表: best_iops_by_rw.png")
 
 def main():
@@ -217,7 +221,7 @@ def main():
     
     args = parser.parse_args()
     
-    result_file = 'iops_test_results.csv'
+    result_file = 'result/iops_test_results.csv'
     
     # 如果只需可视化，则跳过测试
     if args.visualize:
@@ -245,10 +249,10 @@ def main():
     else:
         # 完整测试使用更多参数组合
         test_params = {
-            'rw': ['randread', 'randwrite', 'read', 'write', 'randrw'],
-            'bs': ['4k', '8k', '16k', '32k', '64k', '128k'],
-            'iodepth': [1, 4, 8, 16, 32, 64, 128],
-            'numjobs': [1, 2, 4, 8, 16],
+            'rw': ['randrw'],
+            'bs': ['4k'],
+            'iodepth': [16, 32, 64],
+            'numjobs': [4, 8, 16],
             'ioengine': ['libaio', 'io_uring', 'sync', 'psync']
         }
     
