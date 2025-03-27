@@ -8,7 +8,7 @@ import json
 import time
 from datetime import datetime
 
-def run_fio_test(test_name, filename, size, rw, bs, iodepth, numjobs, runtime, direct=1):
+def run_fio_test(test_name, filename, size, rw, bs, iodepth, numjobs, runtime, direct=1, ioengine="libaio"):
     """
     运行单个 FIO 测试并返回结果
     
@@ -22,6 +22,7 @@ def run_fio_test(test_name, filename, size, rw, bs, iodepth, numjobs, runtime, d
         numjobs: 并发任务数
         runtime: 测试运行时间(秒)
         direct: 是否使用直接 IO (0 或 1)
+        ioengine: IO 引擎类型 (libaio, io_uring, sync 等)
     """
     output_format = "json"
     output_file = f"fio_results_{test_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -37,6 +38,7 @@ def run_fio_test(test_name, filename, size, rw, bs, iodepth, numjobs, runtime, d
         f"--numjobs={numjobs}",
         f"--runtime={runtime}",
         f"--direct={direct}",
+        f"--ioengine={ioengine}",
         "--group_reporting=1",
         f"--output-format={output_format}",
         f"--output={output_file}"
@@ -100,6 +102,9 @@ def main():
     parser.add_argument('--iodepth', type=int, default=32, help='IO 队列深度 (默认: 32)')
     parser.add_argument('--numjobs', type=int, default=4, help='并发任务数 (默认: 4)')
     parser.add_argument('--runtime', type=int, default=60, help='测试运行时间(秒) (默认: 60)')
+    parser.add_argument('--ioengine', type=str, default='libaio', 
+                        choices=['libaio', 'io_uring', 'sync', 'psync', 'vsync'],
+                        help='IO 引擎类型 (默认: libaio)')
     
     args = parser.parse_args()
     
@@ -119,7 +124,8 @@ def main():
         bs=args.bs,
         iodepth=args.iodepth,
         numjobs=args.numjobs,
-        runtime=args.runtime
+        runtime=args.runtime,
+        ioengine=args.ioengine
     )
     
     # 打印结果摘要
