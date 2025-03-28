@@ -152,7 +152,7 @@ def run_parameter_test(device, test_params, result_file='iops_test_results.csv',
                 }
             
             # 显示当前最佳结果
-            logger.info(f"当前最佳 IOPS: {best_iops}")
+            logger.info(f"当前iops: {iops}, 最佳 IOPS: {best_iops}")
             logger.info(f"最佳参数: {best_params}")
             
             # 更新进度条

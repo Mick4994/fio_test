@@ -20,6 +20,12 @@ sudo pacman -S fio
 
 ## 使用方法
 
+安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
 基本用法：
 
 ```bash
