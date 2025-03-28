@@ -144,74 +144,169 @@ def visualize_results(result_file='iops_test_results.csv'):
     
     # 提取不同参数的唯一值
     rw_modes = set(row['rw'] for row in data)
-    block_sizes = set(row['bs'] for row in data)
+    block_sizes = sorted(set(row['bs'] for row in data), key=lambda x: int(x[:-1]))
     io_engines = set(row['ioengine'] for row in data)
+    io_depths = set(int(row['iodepth']) for row in data)
+    # print(f"发现的参数: rw={rw_modes}, bs={block_sizes}, ioengine={io_engines}, iodepth={io_depths}")
+    # exit(0)
     
     # 为每种读写模式创建一个图表
     for rw in rw_modes:
-        plt.figure(figsize=(12, 8))
-        
-        # 筛选当前读写模式的数据
-        rw_data = [row for row in data if row['rw'] == rw]
-        
-        # 按块大小和 IO 引擎分组
-        for bs in block_sizes:
-            for ioengine in io_engines:
-                # 筛选当前块大小和 IO 引擎的数据
-                filtered_data = [row for row in rw_data if row['bs'] == bs and row['ioengine'] == ioengine]
-                if not filtered_data:
-                    continue
-                
-                # 提取 IO 深度和 IOPS
-                x = [int(row['iodepth']) for row in filtered_data]
-                y = [float(row['iops']) for row in filtered_data]
-                
-                # 按 IO 深度排序
-                sorted_data = sorted(zip(x, y))
-                if not sorted_data:
-                    continue
-                
-                x, y = zip(*sorted_data)
-                
-                # 绘制线图
-                plt.plot(x, y, marker='o', label=f"BS={bs}, Engine={ioengine}")
-        
-        plt.title(f"IOPS vs IO 深度 ({rw})")
-        plt.xlabel("IO 深度")
-        plt.ylabel("IOPS")
-        plt.xscale('log')
-        plt.grid(True)
-        plt.legend()
-        
-        # 保存图表
-        plt.savefig(f"result/iops_{rw}_results.png")
-        print(f"已保存图表: iops_{rw}_results.png")
+        # 为每个 IO 深度创建一个图表
+        for iodepth in io_depths:
+            plt.figure(figsize=(15, 8))
+            
+            # 筛选当前读写模式和 IO 深度的数据
+            filtered_data = [row for row in data if row['rw'] == rw and int(row['iodepth']) == iodepth]
+            if not filtered_data:
+                continue
+            
+            # 准备柱状图数据
+            bar_positions = []
+            bar_heights = []
+            bar_labels = []
+            bar_colors = []
+            
+            # 颜色映射 - 修复 get_cmap 问题
+            try:
+                # 尝试新版本的方法
+                from matplotlib import colormaps
+                color_map = colormaps['tab10']
+            except (ImportError, AttributeError):
+                # 回退到旧版本的方法
+                color_map = plt.cm.tab10
+            
+            # 计算每个块大小的组宽度
+            group_width = 0.8
+            bar_width = group_width / len(io_engines)
+            
+            # 按块大小和 IO 引擎分组
+            for i, bs in enumerate(block_sizes):
+                for j, engine in enumerate(io_engines):
+                    # 筛选当前块大小和 IO 引擎的数据
+                    bs_engine_data = [row for row in filtered_data if row['bs'] == bs and row['ioengine'] == engine]
+                    
+                    # 计算该组合的平均 IOPS
+                    if bs_engine_data:
+                        avg_iops = sum(float(row['iops']) for row in bs_engine_data) / len(bs_engine_data)
+                        
+                        # 计算柱的位置
+                        position = i + (j - len(io_engines)/2 + 0.5) * bar_width
+                        
+                        bar_positions.append(position)
+                        bar_heights.append(avg_iops)
+                        bar_labels.append(f"{bs}-{engine}")
+                        bar_colors.append(color_map(j % 10))  # 确保索引不超过颜色表范围
+            
+            # 绘制柱状图
+            bars = plt.bar(bar_positions, bar_heights, width=bar_width, color=bar_colors)
+            
+            # 设置 x 轴标签
+            plt.xticks(range(len(block_sizes)), block_sizes)
+            
+            # 添加图例 - 修复颜色映射问题
+            legend_handles = [plt.Rectangle((0,0),1,1, color=color_map(j % 10)) for j in range(len(io_engines))]
+            plt.legend(legend_handles, io_engines, title="IO 引擎")
+            
+            # 在柱上显示数值
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{int(height)}',
+                        ha='center', va='bottom', rotation=0, fontsize=8)
+            
+            plt.title(f"{rw} 模式下不同块大小和 IO 引擎的 IOPS (IO 深度={iodepth})")
+            plt.xlabel("块大小")
+            plt.ylabel("IOPS")
+            plt.grid(True, axis='y')
+            
+            # 保存图表
+            plt.tight_layout()
+            plt.savefig(f"result/iops_{rw}_depth{iodepth}_results.png")
+            print(f"已保存图表: iops_{rw}_depth{iodepth}_results.png")
     
     # 创建一个汇总图表，显示不同读写模式的最佳 IOPS
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 8))
     
     # 为每种读写模式找到最佳 IOPS
     best_iops_by_rw = {}
+    best_params_by_rw = {}
     for rw in rw_modes:
         rw_data = [row for row in data if row['rw'] == rw]
         if rw_data:
-            best_iops = max(float(row['iops']) for row in rw_data)
+            best_row = max(rw_data, key=lambda x: float(x['iops']))
+            best_iops = float(best_row['iops'])
             best_iops_by_rw[rw] = best_iops
+            best_params_by_rw[rw] = f"bs={best_row['bs']}, depth={best_row['iodepth']}, jobs={best_row['numjobs']}, engine={best_row['ioengine']}"
     
     # 绘制条形图
-    plt.bar(best_iops_by_rw.keys(), best_iops_by_rw.values())
+    bars = plt.bar(best_iops_by_rw.keys(), best_iops_by_rw.values(), color='skyblue')
     plt.title("各读写模式的最佳 IOPS")
     plt.xlabel("读写模式")
     plt.ylabel("IOPS")
     plt.grid(True, axis='y')
     
-    # 在条形上显示具体数值
+    # 在条形上显示具体数值和最佳参数
     for i, (rw, iops) in enumerate(best_iops_by_rw.items()):
-        plt.text(i, iops, f"{int(iops)}", ha='center', va='bottom')
+        plt.text(i, iops, f"{int(iops)}", ha='center', va='bottom', fontsize=10)
+        plt.text(i, iops/2, best_params_by_rw[rw], ha='center', va='center', fontsize=8, 
+                 rotation=90, color='white', fontweight='bold')
     
     # 保存图表
+    plt.tight_layout()
     plt.savefig("result/best_iops_by_rw.png")
     print("已保存汇总图表: best_iops_by_rw.png")
+    
+    # 创建一个热力图，显示不同参数组合的 IOPS
+    for rw in rw_modes:
+        rw_data = [row for row in data if row['rw'] == rw]
+        if not rw_data:
+            continue
+            
+        for engine in io_engines:
+            engine_data = [row for row in rw_data if row['ioengine'] == engine]
+            if not engine_data:
+                continue
+                
+            # 创建热力图数据
+            heatmap_data = np.zeros((len(block_sizes), len(io_depths)))
+            
+            for i, bs in enumerate(block_sizes):
+                for j, depth in enumerate(io_depths):
+                    # 筛选当前块大小和 IO 深度的数据
+                    filtered = [row for row in engine_data if row['bs'] == bs and int(row['iodepth']) == depth]
+                    if filtered:
+                        # 计算平均 IOPS
+                        avg_iops = sum(float(row['iops']) for row in filtered) / len(filtered)
+                        heatmap_data[i, j] = avg_iops
+            
+            # 绘制热力图
+            plt.figure(figsize=(10, 8))
+            plt.imshow(heatmap_data, cmap='hot', aspect='auto')
+            
+            # 添加颜色条
+            cbar = plt.colorbar()
+            cbar.set_label('IOPS')
+            
+            # 设置坐标轴标签
+            plt.xticks(range(len(io_depths)), io_depths)
+            plt.yticks(range(len(block_sizes)), block_sizes)
+            
+            plt.title(f"{rw} 模式下不同块大小和 IO 深度的 IOPS (引擎={engine})")
+            plt.xlabel("IO 深度")
+            plt.ylabel("块大小")
+            
+            # 在每个单元格中显示 IOPS 值
+            for i in range(len(block_sizes)):
+                for j in range(len(io_depths)):
+                    if heatmap_data[i, j] > 0:
+                        plt.text(j, i, f"{int(heatmap_data[i, j])}", 
+                                ha="center", va="center", color="white" if heatmap_data[i, j] < np.max(heatmap_data)/2 else "black")
+            
+            # 保存热力图
+            plt.tight_layout()
+            plt.savefig(f"result/heatmap_{rw}_{engine}.png")
+            print(f"已保存热力图: heatmap_{rw}_{engine}.png")
 
 def main():
     parser = argparse.ArgumentParser(description='SSD IOPS 优化测试工具')
@@ -249,8 +344,8 @@ def main():
     else:
         # 完整测试使用更多参数组合
         test_params = {
-            'rw': ['randrw'],
-            'bs': ['4k'],
+            'rw': ['randread', 'randwrite', 'read', 'write', 'randrw'],
+            'bs': ['4k', '8k', '16k'],
             'iodepth': [16, 32, 64],
             'numjobs': [4, 8, 16],
             'ioengine': ['libaio', 'io_uring', 'sync', 'psync']
